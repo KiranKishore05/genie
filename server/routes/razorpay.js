@@ -98,10 +98,37 @@ router.post("/verify-payment", async (req, res) => {
             .update(sign)
             .digest("hex");
 
+        const signaturesMatch = crypto.timingSafeEqual(
+            Buffer.from(razorpay_signature),
+            Buffer.from(expectedSign)
+        );
+
+        if (!signaturesMatch) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment verification failed",
+            });
+        }
+
         const payment = await razorpay.payments.fetch(razorpay_payment_id);
 
-        if (payment.status === "captured") {
-            payment.status = "SERVICE_BOOKED";
+        if (payment.status !== "captured") {
+            return res.status(400).json({
+                success: false,
+                message: `Payment is not captured (status: ${payment.status})`,
+            });
+        }
+
+        const existingPayment = await Payment.findOne({
+            paymentId: razorpay_payment_id,
+        });
+
+        if (existingPayment) {
+            return res.json({
+                success: true,
+                message: "Payment was already verified",
+                paymentId: existingPayment._id,
+            });
         }
 
         const newPayment = new Payment({
@@ -110,7 +137,7 @@ router.post("/verify-payment", async (req, res) => {
             paymentId: razorpay_payment_id,
             amount: payment.amount,
             currency: payment.currency,
-            status: payment.status,
+            status: "SERVICE_BOOKED",
             method: payment.method,
             items: orderDetails.items,
             summary: orderDetails.summary,
@@ -125,18 +152,11 @@ router.post("/verify-payment", async (req, res) => {
 
         await newPayment.save();
 
-        if (razorpay_signature === expectedSign) {
-            res.json({
-                success: true,
-                message: "Payment verified and saved successfully",
-                paymentId: newPayment._id,
-            });
-        } else {
-            res.status(400).json({
-                success: false,
-                message: "Payment verification failed",
-            });
-        }
+        res.json({
+            success: true,
+            message: "Payment verified and saved successfully",
+            paymentId: newPayment._id,
+        });
     } catch (error) {
         console.error("Error in verify-payment:", error);
         res.status(500).json({ success: false, error: error.message });
