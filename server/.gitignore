@@ -28,3 +28,6 @@ coverage/
 
 # Optional: keep uploaded assets in repo if required
 # public/assets/
+
+.vercel
+.env*
