@@ -98,10 +98,11 @@ router.post("/verify-payment", async (req, res) => {
             .update(sign)
             .digest("hex");
 
-        const signaturesMatch = crypto.timingSafeEqual(
-            Buffer.from(razorpay_signature),
-            Buffer.from(expectedSign)
-        );
+        const receivedSignature = Buffer.from(razorpay_signature);
+        const expectedSignature = Buffer.from(expectedSign);
+        const signaturesMatch =
+            receivedSignature.length === expectedSignature.length &&
+            crypto.timingSafeEqual(receivedSignature, expectedSignature);
 
         if (!signaturesMatch) {
             return res.status(400).json({
